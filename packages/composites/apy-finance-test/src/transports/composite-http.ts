@@ -180,7 +180,7 @@ export class CompositeHttpTransport<T extends TransportGenerics> extends Subscri
             ? `Data Provider request failed with status ${err.cause.status}: "${JSON.stringify(
                 err.cause.response?.data,
               )}"`
-            : `Data Provider request failed with error: ${JSON.stringify(err.cause)}`
+            : `Data Provider request failed with error: ${err.cause}`
 
         censorLogs(() => logger.info(errorMessage))
         return {

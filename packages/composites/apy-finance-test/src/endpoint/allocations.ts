@@ -8,6 +8,7 @@ import assetAllocationAbi from '../abi/IAssetAllocation.json'
 import registryAbi from '../abi/IRegistry.json'
 import { config } from '../config'
 import { CompositeHttpTransport } from '../transports/composite-http'
+import { Multicall } from '../utils/multicall'
 
 const logger = makeLogger('apy-finance-test allocations')
 
@@ -24,83 +25,65 @@ type EndpointTypes = {
   Settings: typeof config.settings
 }
 
-const getAllocationDetails = async (
-  registry: ethers.Contract,
-  allocationId: string,
-): Promise<types.TokenAllocation> => {
-  const [symbol, balance, decimals] = await Promise.all([
-    await registry.symbolOf(allocationId),
-    await registry.balanceOf(allocationId),
-    await registry.decimalsOf(allocationId),
-  ])
-
-  return {
-    symbol,
-    balance: BigNumber.from(balance).toString(),
-    decimals: BigNumber.from(decimals).toNumber(),
-  }
-}
-
 const compositeTransport = new CompositeHttpTransport<EndpointTypes>({
   performRequest: async (_params, settings, _requestHandler) => {
-    const { RPC_URL, CHAIN_ID, REGISTRY_ADDRESS } = settings
+    const { RPC_URL, CHAIN_ID, REGISTRY_ADDRESS, MULTICALL_ADDRESS } = settings
     const provider = new ethers.providers.JsonRpcProvider(RPC_URL, CHAIN_ID)
     const registry = new ethers.Contract(REGISTRY_ADDRESS, registryAbi, provider)
 
     const providerDataRequested = Date.now()
 
-    const chainlinkRegistryAddress = await registry.chainlinkRegistryAddress().catch((e: any) => {
-      logger.error(
-        `Failed to fetch Chainlink Registry address from Registry contract: ${REGISTRY_ADDRESS}, ${JSON.stringify(
-          e,
-        )}`,
-      )
-      throw new AdapterDataProviderError(
-        {
-          statusCode: 502,
-          url: RPC_URL,
-          cause: e,
-        },
-        {
-          providerDataRequestedUnixMs: providerDataRequested,
-          providerDataReceivedUnixMs: 0,
-          providerIndicatedTimeUnixMs: undefined,
-        },
-      )
-    })
-
-    const chainlinkRegistry = new ethers.Contract(
-      chainlinkRegistryAddress,
-      assetAllocationAbi,
-      provider,
-    )
-
-    const allocationIds: string[] = await chainlinkRegistry
-      .getAssetAllocationIds()
-      .catch((e: any) => {
+    try {
+      const chainlinkRegistryAddress = await registry.chainlinkRegistryAddress().catch((e: any) => {
         logger.error(
-          `Failed to fetch asset allocation IDs from Chainlink Registry contract: ${chainlinkRegistryAddress}`,
+          `Failed to fetch Chainlink Registry address from Registry contract: ${REGISTRY_ADDRESS}, ${e}}`,
         )
-        throw new AdapterDataProviderError(
-          {
-            statusCode: 502,
-            url: RPC_URL,
-            cause: e,
-          },
-          {
-            providerDataRequestedUnixMs: providerDataRequested,
-            providerDataReceivedUnixMs: 0,
-            providerIndicatedTimeUnixMs: undefined,
-          },
-        )
+        throw e
       })
 
-    const allocations = await Promise.all(
-      allocationIds.map((allocationId) => getAllocationDetails(chainlinkRegistry, allocationId)),
-    ).catch((e: any) => {
-      logger.error(
-        `Failed to fetch details for allocations from Chainlink Registry contract: ${chainlinkRegistryAddress}`,
+      const chainlinkRegistry = new ethers.Contract(
+        chainlinkRegistryAddress,
+        assetAllocationAbi,
+        provider,
       )
+
+      const allocationIds: string[] = await chainlinkRegistry
+        .getAssetAllocationIds()
+        .catch((e: any) => {
+          logger.error(
+            `Failed to fetch asset allocation IDs from Chainlink Registry contract: ${chainlinkRegistryAddress}, ${e}`,
+          )
+          throw e
+        })
+
+      const multicall = new Multicall(MULTICALL_ADDRESS, provider)
+      const symbols: string[] = await multicall.call(chainlinkRegistry, 'symbolOf', allocationIds)
+      const balances: string[] = await multicall.call(chainlinkRegistry, 'balanceOf', allocationIds)
+      const decimals: string[] = await multicall.call(
+        chainlinkRegistry,
+        'decimalsOf',
+        allocationIds,
+      )
+
+      const allocations: types.TokenAllocation[] = allocationIds.map((_id, index) => ({
+        symbol: symbols[index],
+        balance: BigNumber.from(balances[index]).toString(),
+        decimals: BigNumber.from(decimals[index]).toNumber(),
+      }))
+
+      return {
+        params: {},
+        response: {
+          data: allocations,
+          result: null,
+          timestamps: {
+            providerDataRequestedUnixMs: providerDataRequested,
+            providerDataReceivedUnixMs: Date.now(),
+            providerIndicatedTimeUnixMs: undefined,
+          },
+        },
+      }
+    } catch (e) {
       throw new AdapterDataProviderError(
         {
           statusCode: 502,
@@ -113,19 +96,6 @@ const compositeTransport = new CompositeHttpTransport<EndpointTypes>({
           providerIndicatedTimeUnixMs: undefined,
         },
       )
-    })
-
-    return {
-      params: {},
-      response: {
-        data: allocations,
-        result: null,
-        timestamps: {
-          providerDataRequestedUnixMs: providerDataRequested,
-          providerDataReceivedUnixMs: Date.now(),
-          providerIndicatedTimeUnixMs: undefined,
-        },
-      },
     }
   },
 })
