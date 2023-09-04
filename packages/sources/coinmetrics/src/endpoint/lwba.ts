@@ -7,7 +7,12 @@ import { InputParameters } from '@chainlink/external-adapter-framework/validatio
 import { config } from '../config'
 import { assetQuoteWebsocketTransport, pairQuoteWebsocketTransport } from '../transport/lwba'
 
-export const inputParameters = new InputParameters(priceEndpointInputParametersDefinition)
+export const inputParameters = new InputParameters(priceEndpointInputParametersDefinition, [
+  {
+    base: 'ETH',
+    quote: 'USD',
+  },
+])
 
 const assets: string[] = ['bnb', 'uni', 'sol', 'ltc', 'xrp']
 
