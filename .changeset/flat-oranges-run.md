@@ -1,4 +1,5 @@
 ---
+'@chainlink/trumatic-matic-exchange-rate-adapter': patch
 '@chainlink/token-allocation-adapter': patch
 '@chainlink/historical-average-adapter': patch
 '@chainlink/moonbeam-address-list-adapter': patch
@@ -12,6 +13,7 @@
 '@chainlink/openexchangerates-adapter': patch
 '@chainlink/dxfeed-secondary-adapter': patch
 '@chainlink/polkadot-balance-adapter': patch
+'@chainlink/por-address-list-adapter': patch
 '@chainlink/the-network-firm-adapter': patch
 '@chainlink/tradingeconomics-adapter': patch
 '@chainlink/wbtc-address-set-adapter': patch
@@ -19,6 +21,7 @@
 '@chainlink/coinmarketcap-adapter': patch
 '@chainlink/cryptocompare-adapter': patch
 '@chainlink/nft-blue-chip-adapter': patch
+'@chainlink/view-function-adapter': patch
 '@chainlink/alphavantage-adapter': patch
 '@chainlink/cfbenchmarks-adapter': patch
 '@chainlink/coinmetrics-adapter': patch
